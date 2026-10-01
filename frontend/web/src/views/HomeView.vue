@@ -1,0 +1,194 @@
+<script setup>
+import { onMounted, ref, watch } from 'vue'
+import api, { errorMessage } from '../api/client'
+import { useAuthStore } from '../stores/auth'
+import TutorialCard from '../components/TutorialCard.vue'
+
+const auth = useAuthStore()
+
+const tutorials = ref([])
+const technologies = ref([])
+const loading = ref(true)
+const error = ref('')
+
+// Filtros + paginación
+const search = ref('')
+const technology = ref('')   // id o slug (ComboBox)
+const sort = ref('')
+const page = ref(1)
+const pageSize = 9
+const total = ref(0)
+const totalPages = ref(1)
+
+let timer = null
+
+// Guarda contra respuestas fuera de orden: load() se dispara desde el
+// debounce del buscador, desde los ComboBox y desde la paginación. Si dos
+// peticiones vuelan a la vez y la antigua llega la última, sobrescribiría
+// los datos frescos con datos obsoletos.
+let requestSeq = 0
+
+async function load() {
+  const seq = ++requestSeq
+  loading.value = true
+  error.value = ''
+  try {
+    const params = { page: page.value, pageSize }
+    if (search.value.trim()) params.search = search.value.trim()
+    if (technology.value) params.technology = technology.value
+    if (sort.value) params.sort = sort.value
+
+    const { data } = await api.get('/tutorials', { params })
+    if (seq !== requestSeq) return // respuesta obsoleta
+    tutorials.value = data.items
+    total.value = data.totalCount
+    totalPages.value = data.totalPages
+  } catch (e) {
+    if (seq !== requestSeq) return // fallo de una petición ya superada
+    error.value = errorMessage(e, 'No se pudieron cargar los tutoriales.')
+  } finally {
+    if (seq === requestSeq) loading.value = false
+  }
+}
+
+async function loadTechnologies() {
+  try {
+    const { data } = await api.get('/technologies')
+    technologies.value = data
+  } catch {
+    technologies.value = []
+  }
+}
+
+// Debounce del buscador
+watch(search, () => {
+  clearTimeout(timer)
+  timer = setTimeout(() => {
+    page.value = 1
+    load()
+  }, 320)
+})
+
+watch([technology, sort], () => {
+  page.value = 1
+  load()
+})
+
+watch(page, load)
+
+onMounted(() => {
+  loadTechnologies()
+  load()
+})
+</script>
+
+<template>
+  <div>
+    <div class="hero">
+      <div>
+        <h1 class="section-title">Tutoriales de la comunidad</h1>
+        <p class="section-sub" style="margin: 0">
+          Explora, filtra por tecnología y guarda lo que te interese en tu biblioteca.
+        </p>
+      </div>
+      <router-link v-if="auth.isAuthenticated" class="btn btn-primary" to="/new-tutorial">
+        + Agregar tutorial
+      </router-link>
+    </div>
+
+    <!-- Barra: buscador + ComboBox tecnología + orden -->
+    <div class="toolbar">
+      <input
+        v-model="search"
+        class="toolbar-search"
+        type="search"
+        placeholder="🔍 Buscar por título o descripción…"
+        aria-label="Buscar tutoriales"
+      />
+
+      <!-- ComboBox filtro por tecnología -->
+      <select v-model="technology" class="toolbar-select" aria-label="Filtrar por tecnología">
+        <option value="">Todas las tecnologías</option>
+        <option v-for="t in technologies" :key="t.id" :value="t.id">
+          {{ t.name }} ({{ t.tutorialCount }})
+        </option>
+      </select>
+
+      <select v-model="sort" class="toolbar-select" aria-label="Ordenar">
+        <option value="">Más recientes</option>
+        <option value="likes">Más populares</option>
+        <option value="title">Título A-Z</option>
+      </select>
+    </div>
+
+    <!-- Estado de error (tiene prioridad sobre el vacío: si falló, NO diremos
+         "no se encontraron tutoriales", que sería un mensaje contradictorio) -->
+    <div v-if="!loading && error" class="empty">
+      <span class="empty-icon">⚠️</span>
+      <p>{{ error }}</p>
+      <button class="btn btn-outline" @click="load">Reintentar</button>
+    </div>
+
+    <!-- Estado de carga -->
+    <div v-else-if="loading" class="empty">
+      <span class="spinner dark" style="width: 30px; height: 30px" />
+      <p>Cargando tutoriales…</p>
+    </div>
+
+    <!-- Estado vacío -->
+    <div v-else-if="tutorials.length === 0" class="empty">
+      <span class="empty-icon">🔍</span>
+      <p>
+        No se encontraron tutoriales
+        <span v-if="search"> para «{{ search }}»</span>.
+      </p>
+      <button
+        v-if="search || technology || sort"
+        class="btn btn-outline"
+        @click="search = ''; technology = ''; sort = ''"
+      >
+        Limpiar filtros
+      </button>
+    </div>
+
+    <!-- Lista general -->
+    <template v-else>
+      <div class="grid">
+        <TutorialCard v-for="t in tutorials" :key="t.id" :tutorial="t" @changed="load" />
+      </div>
+
+      <!-- Paginación -->
+      <nav v-if="totalPages > 1" class="pagination" aria-label="Paginación">
+        <button class="btn btn-outline btn-sm" :disabled="page <= 1" @click="page--">
+          ← Anterior
+        </button>
+
+        <span class="page-info">
+          Página <strong>{{ page }}</strong> de <strong>{{ totalPages }}</strong>
+          <span class="muted"> · {{ total }} tutoriales</span>
+        </span>
+
+        <button class="btn btn-outline btn-sm" :disabled="page >= totalPages" @click="page++">
+          Siguiente →
+        </button>
+      </nav>
+    </template>
+  </div>
+</template>
+
+<style scoped>
+.hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+</style>
