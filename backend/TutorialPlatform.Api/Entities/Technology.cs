@@ -12,8 +12,24 @@ public class Technology
     [Required, MaxLength(80)]
     public string Slug { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Dominio al que pertenece: <see cref="Domains.Programacion"/> (las
+    /// tecnologías de siempre) o <see cref="Domains.Dibujo"/> (las técnicas).
+    /// Cada índice de la aplicación filtra por el suyo, así que una tecnología
+    /// no puede mezclar tutoriales de programación con los de dibujo.
+    /// </summary>
+    [Required, MaxLength(20)]
+    public string Domain { get; set; } = Domains.Programacion;
+
     [MaxLength(500)]
     public string? ImageUrl { get; set; }
 
     public ICollection<Tutorial> Tutorials { get; set; } = new List<Tutorial>();
+}
+
+/// <summary>Dominios de contenido: separan el índice de programación del de dibujo.</summary>
+public static class Domains
+{
+    public const string Programacion = "programacion";
+    public const string Dibujo = "dibujo";
 }

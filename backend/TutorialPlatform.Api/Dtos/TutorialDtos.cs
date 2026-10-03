@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using TutorialPlatform.Api.Entities;
 
 namespace TutorialPlatform.Api.Dtos;
 
@@ -54,6 +55,13 @@ public class TutorialQuery
 
     /// <summary>published | likes | title</summary>
     public string? Sort { get; set; }
+
+    /// <summary>
+    /// Dominio del índice que consulta: <c>programacion</c> (por defecto) o
+    /// <c>dibujo</c>. Sin esto, el índice de dibujo vería también los
+    /// tutoriales de programación y viceversa.
+    /// </summary>
+    public string Domain { get; set; } = Domains.Programacion;
 }
 
 // ---------- Responses ----------

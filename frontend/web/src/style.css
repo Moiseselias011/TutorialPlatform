@@ -1,25 +1,44 @@
 :root {
-  --bg: #0f172a;
+  --bg: #000000;
+  --gold: #cfaf30;
   --bg-soft: #1e293b;
   --surface: #ffffff;
   --border: #e2e8f0;
   --text: #0f172a;
-  --text-soft: #64748b;
+  --text-soft: #858585;
   --primary: #4f46e5;
   --primary-dark: #4338ca;
   --danger: #dc2626;
   --success: #16a34a;
   --radius: 10px;
   --shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 14px rgba(15, 23, 42, 0.06);
+
+  /* Texto tipo Visual Studio Code (tema oscuro «Dark+»).
+     --vs-fg es editor.foreground y --text-soft es editorLineNumber:
+     el gris #858585 va para el fondo negro; las superficies blancas
+     redeclaran --text-soft a #64748b para que sigan legibles. */
+  --vs-fg: #d4d4d4;
+  --vs-blue: #569cd6;
+  --vs-green: #6a9955;
+  --vs-orange: #ce9178;
+
+  /* Tipografía: sans-serif en negrita. Antes era Consolas (monoespaciada,
+     petición «tipo Visual Studio Code») y se descartó manteniendo solo
+     los colores del tema oscuro. */
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  background: #f8fafc;
-  color: var(--text);
+  font-family: var(--font);
+  /* Negrita: es lo que pidió el usuario. No hay ninguna regla del proyecto
+     que fije font-weight: 400 o normal, así que todo hereda este 700;
+     los elementos con peso propio (600/700/800) lo conservan. */
+  font-weight: 700;
+  background: var(--bg);
+  color: var(--vs-fg);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -30,9 +49,11 @@ body {
   display: flex;
   align-items: center;
   gap: 24px;
-  padding: 14px 28px;
-  background: var(--bg);
-  color: #fff;
+  padding: 8px 28px;
+  /* Barra dorada; sobre dorado el texto tiene que ser oscuro
+     (el blanco original daba ~2:1 de contraste y no se leía). */
+  background: var(--gold);
+  color: #16120a;
   position: sticky;
   top: 0;
   z-index: 50;
@@ -44,22 +65,85 @@ body {
   gap: 8px;
   font-weight: 700;
   font-size: 18px;
-  color: #fff;
+  color: #16120a;
   text-decoration: none;
 }
-.brand-mark { font-size: 20px; }
+/* Logo de la cabecera: sustituye a la emoji y al nombre en texto.
+   Ancho fijo: 154 px era el doble del natural y el usuario pidió restarle
+   un 25 % de alargado → 154 × 0,75 = 116 px. El alto se mantiene en 52 px,
+   así que fijando las dos medidas el navegador estira la imagen. */
+.brand-logo { width: 116px; height: 52px; display: block; }
 .accent { color: #818cf8; }
 
 .nav-links { display: flex; gap: 18px; flex: 1; }
 .nav-links a {
-  color: #cbd5e1;
+  color: #3a320f;
   text-decoration: none;
   font-size: 14.5px;
   padding: 6px 2px;
   border-bottom: 2px solid transparent;
 }
-.nav-links a:hover { color: #fff; }
-.nav-links a.router-link-exact-active { color: #fff; border-bottom-color: #818cf8; }
+.nav-links a:hover { color: #16120a; }
+.nav-links a.router-link-exact-active { color: #16120a; border-bottom-color: #16120a; }
+
+/* ---------- Menú desplegable «Tutoriales» ----------
+   El disparador lleva el mismo aspecto que los enlaces de al lado para que no
+   se note que ahora es un <button> y no un <a>. */
+.nav-dropdown { position: relative; }
+
+.nav-dropdown-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  font-size: 14.5px;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 6px 2px;
+  color: #3a320f;
+  cursor: pointer;
+}
+.nav-dropdown-toggle:hover { color: #16120a; }
+.nav-dropdown-toggle.active { color: #16120a; border-bottom-color: #16120a; }
+
+.nav-caret { font-size: 10px; transition: transform 0.15s ease; }
+.nav-dropdown-toggle[aria-expanded='true'] .nav-caret { transform: rotate(180deg); }
+
+.nav-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 190px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+  z-index: 60; /* por encima de la barra (z-index: 50) */
+}
+
+/* Los selectores llevan prefijo .nav-links para ganarle especificidad a las
+   reglas genéricas de arriba y poder usar el texto oscuro sobre fondo blanco. */
+.nav-links .nav-dropdown-menu a {
+  display: block;
+  padding: 9px 12px;
+  border-bottom: 0;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 14.5px;
+  text-decoration: none;
+}
+.nav-links .nav-dropdown-menu a:hover {
+  background: #f6efdb;
+  color: #16120a;
+}
+.nav-links .nav-dropdown-menu a.router-link-exact-active {
+  background: #f6efdb;
+  border-bottom: 0;
+  color: #16120a;
+  font-weight: 700;
+}
 
 .nav-auth { display: flex; align-items: center; gap: 10px; }
 
@@ -102,8 +186,8 @@ body {
 .btn:disabled { opacity: .6; cursor: not-allowed; }
 .btn-primary { background: var(--primary); color: #fff; }
 .btn-primary:hover:not(:disabled) { background: var(--primary-dark); }
-.btn-ghost { color: #cbd5e1; border-color: #334155; }
-.btn-ghost:hover { background: #1e293b; color: #fff; }
+.btn-ghost { color: #3a320f; border-color: rgba(22, 18, 10, .45); }
+.btn-ghost:hover { background: rgba(22, 18, 10, .12); color: #16120a; }
 .btn-outline { background: #fff; color: var(--text); border-color: var(--border); }
 .btn-outline:hover { background: #f1f5f9; }
 .btn-danger { background: var(--danger); color: #fff; }
@@ -117,8 +201,8 @@ body {
   text-align: center;
   color: var(--text-soft);
   font-size: 13px;
-  background: #fff;
-  border-top: 1px solid var(--border);
+  background: var(--bg);
+  border-top: 1px solid #262626;
 }
 
 /* ---------- Formularios ---------- */
@@ -128,6 +212,17 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 26px;
+  /* Superficie blanca: dentro reponemos el texto oscuro y el gris original,
+     porque el body es negro y heredaría los colores claros. */
+  color: var(--text);
+  --text-soft: #64748b;
+}
+
+/* Otras superficies blancas: tarjeta de tutorial y modal. */
+.t-card,
+.modal {
+  color: var(--text);
+  --text-soft: #64748b;
 }
 
 .form { display: flex; flex-direction: column; gap: 16px; }
@@ -198,6 +293,7 @@ body {
   border-radius: var(--radius);
   font-size: 14.5px;
   background: #fff;
+  color: var(--text);
 }
 .toolbar-select {
   padding: 11px 12px;
@@ -205,6 +301,7 @@ body {
   border-radius: var(--radius);
   font-size: 14.5px;
   background: #fff;
+  color: var(--text);
   cursor: pointer;
   max-width: 260px;
 }

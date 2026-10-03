@@ -14,6 +14,7 @@ public class AppDbContext : DbContext
     public DbSet<SavedTutorial> SavedTutorials => Set<SavedTutorial>();
     public DbSet<Like> Likes => Set<Like>();
     public DbSet<Comment> Comments => Set<Comment>();
+    public DbSet<CommentLike> CommentLikes => Set<CommentLike>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -79,6 +80,15 @@ public class AppDbContext : DbContext
              .OnDelete(DeleteBehavior.Cascade);
         });
 
+        // ---------- Tecnologías ----------
+        mb.Entity<Technology>(e =>
+        {
+            // Las que ya existían en la BD reciben «programacion» al añadir la
+            // columna; sin esto quedarían con la cadena vacía y no aparecerían
+            // en ningún índice.
+            e.Property(t => t.Domain).HasDefaultValue(Domains.Programacion);
+        });
+
         // ---------- Likes (un usuario = un like por tutorial) ----------
         mb.Entity<Like>(e =>
         {
@@ -99,6 +109,7 @@ public class AppDbContext : DbContext
         mb.Entity<Comment>(e =>
         {
             e.HasIndex(c => c.TutorialId);
+            e.HasIndex(c => c.ParentCommentId);
 
             e.HasOne(c => c.Tutorial)
              .WithMany(t => t.Comments)
@@ -109,6 +120,32 @@ public class AppDbContext : DbContext
              .WithMany(u => u.Comments)
              .HasForeignKey(c => c.AuthorId)
              .OnDelete(DeleteBehavior.Restrict);
+
+            // Respuestas. Restrict (y no Cascade) es deliberado: si el padre se
+            // borrara en cascada, las respuestas de otros usuarios morirían con él
+            // e infringiríamos §5.3 (nadie elimina contenido que no le pertenece).
+            // El controlador promueve antes las respuestas a comentario principal.
+            e.HasOne(c => c.Parent)
+             .WithMany(p => p.Replies)
+             .HasForeignKey(c => c.ParentCommentId)
+             .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ---------- CommentLikes (un usuario = un Me gusta por comentario) ----------
+        mb.Entity<CommentLike>(e =>
+        {
+            e.HasIndex(cl => new { cl.UserId, cl.CommentId }).IsUnique();
+
+            e.HasOne(cl => cl.User)
+             .WithMany(u => u.CommentLikes)
+             .HasForeignKey(cl => cl.UserId)
+             .OnDelete(DeleteBehavior.Cascade);
+
+            // Borrar un comentario borra sus Me gusta: no puede quedar ninguno huérfano.
+            e.HasOne(cl => cl.Comment)
+             .WithMany(c => c.CommentLikes)
+             .HasForeignKey(cl => cl.CommentId)
+             .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

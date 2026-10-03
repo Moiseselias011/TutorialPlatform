@@ -20,6 +20,14 @@ npm-debug.log*
 backend/TutorialPlatform.Api/wwwroot/uploads/*
 !backend/TutorialPlatform.Api/wwwroot/uploads/.gitkeep
 
+# Frontend compilado copiado a wwwroot para producción
+# (se regenera con: cd frontend/web && npm run build)
+backend/TutorialPlatform.Api/wwwroot/index.html
+backend/TutorialPlatform.Api/wwwroot/favicon.svg
+backend/TutorialPlatform.Api/wwwroot/icons.svg
+backend/TutorialPlatform.Api/wwwroot/logo.*
+backend/TutorialPlatform.Api/wwwroot/assets/
+
 # Sensibles: usar variables de entorno en producción
 # (appsettings.json se versiona porque es la configuración de desarrollo)
 appsettings.Production.json

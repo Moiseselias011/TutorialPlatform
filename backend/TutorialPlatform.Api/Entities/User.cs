@@ -32,6 +32,7 @@ public class User
     public ICollection<Tutorial> Tutorials { get; set; } = new List<Tutorial>();
     public ICollection<Comment> Comments { get; set; } = new List<Comment>();
     public ICollection<Like> Likes { get; set; } = new List<Like>();
+    public ICollection<CommentLike> CommentLikes { get; set; } = new List<CommentLike>();
     public ICollection<PersonalList> PersonalLists { get; set; } = new List<PersonalList>();
 }
 

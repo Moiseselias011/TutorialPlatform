@@ -15,12 +15,22 @@ public class TechnologiesController : ControllerBase
 
     public TechnologiesController(AppDbContext db) => _db = db;
 
-    // GET /api/technologies  → lista general + conteo de tutoriales
+    // GET /api/technologies?domain=programacion|dibujo
+    // → lista de un dominio + conteo de tutoriales. Sin parámetro devuelve
+    //   el de programación, para que quien no pida nada siga viendo lo de antes.
     [HttpGet]
     [AllowAnonymous]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] string? domain)
     {
+        var dominio = string.IsNullOrWhiteSpace(domain)
+            ? Domains.Programacion
+            : domain.Trim().ToLowerInvariant();
+
+        if (dominio != Domains.Programacion && dominio != Domains.Dibujo)
+            return BadRequest(new { message = "Dominio no válido. Usa «programacion» o «dibujo»." });
+
         var items = await _db.Technologies
+            .Where(t => t.Domain == dominio)
             .Select(t => new
             {
                 t.Id,
@@ -68,11 +78,18 @@ public class TechnologiesController : ControllerBase
         if (await _db.Technologies.AnyAsync(t => t.Name == name || t.Slug == slug))
             return Conflict(new { message = "Esa tecnología ya existe." });
 
-        var tech = new Technology { Name = name, Slug = slug, ImageUrl = req.ImageUrl };
+        var dominio = string.IsNullOrWhiteSpace(req.Domain)
+            ? Domains.Programacion
+            : req.Domain.Trim().ToLowerInvariant();
+
+        if (dominio != Domains.Programacion && dominio != Domains.Dibujo)
+            return BadRequest(new { message = "Dominio no válido. Usa «programacion» o «dibujo»." });
+
+        var tech = new Technology { Name = name, Slug = slug, ImageUrl = req.ImageUrl, Domain = dominio };
         _db.Technologies.Add(tech);
         await _db.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(GetById), new { id = tech.Id }, new { tech.Id, tech.Name, tech.Slug, tech.ImageUrl });
+        return CreatedAtAction(nameof(GetById), new { id = tech.Id }, new { tech.Id, tech.Name, tech.Slug, tech.ImageUrl, tech.Domain });
     }
 
     // DELETE /api/technologies/5 → solo ADMIN
@@ -97,4 +114,7 @@ public class CreateTechnologyRequest
     public string Name { get; set; } = string.Empty;
     public string? Slug { get; set; }
     public string? ImageUrl { get; set; }
+
+    /// <summary>«programacion» (por defecto) o «dibujo».</summary>
+    public string? Domain { get; set; }
 }

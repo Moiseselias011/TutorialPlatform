@@ -36,6 +36,17 @@ public class TutorialsController : ControllerBase
             .AsNoTracking()
             .AsQueryable();
 
+        // ---- Filtro por dominio: el índice de programación no debe mostrar
+        // ---- tutoriales de dibujo, ni el de dibujo los de programación ----
+        var dominio = string.IsNullOrWhiteSpace(q.Domain)
+            ? Domains.Programacion
+            : q.Domain.Trim().ToLowerInvariant();
+
+        if (dominio != Domains.Programacion && dominio != Domains.Dibujo)
+            return BadRequest(new { message = "Dominio no válido. Usa «programacion» o «dibujo»." });
+
+        query = query.Where(t => t.Technology.Domain == dominio);
+
         // ---- Filtro por tecnología (id o slug) ----
         if (!string.IsNullOrWhiteSpace(q.Technology))
         {
@@ -189,6 +200,13 @@ public class TutorialsController : ControllerBase
         // El backend lo garantiza además del atributo: defensa en profundidad
         if (!_current.IsAdmin)
             return Forbid();
+
+        // Desenganchar antes las respuestas: la FK padre→hijo es Restrict, así que
+        // la BD no dejaría borrar comentarios que aún referenciaran a otros.
+        // Aquí se acaba borrando el hilo entero igualmente (§5.10: borrado real).
+        await _db.Comments
+            .Where(c => c.TutorialId == id && c.ParentCommentId != null)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.ParentCommentId, (int?)null));
 
         _db.Tutorials.Remove(tutorial); // cascade borra likes, comentarios y guardados
         await _db.SaveChangesAsync();

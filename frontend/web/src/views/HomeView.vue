@@ -1,10 +1,17 @@
 <script setup>
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import api, { errorMessage } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import TutorialCard from '../components/TutorialCard.vue'
 
 const auth = useAuthStore()
+const route = useRoute()
+
+// El mismo componente atiende los dos índices: «programación» (/) y «dibujo»
+// (/dibujo). El dominio lo decide la ruta y es lo que se le pide a la API.
+const domain = computed(() => route.meta.domain || 'programacion')
+const esDibujo = computed(() => domain.value === 'dibujo')
 
 const tutorials = ref([])
 const technologies = ref([])
@@ -33,7 +40,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const params = { page: page.value, pageSize }
+    const params = { page: page.value, pageSize, domain: domain.value }
     if (search.value.trim()) params.search = search.value.trim()
     if (technology.value) params.technology = technology.value
     if (sort.value) params.sort = sort.value
@@ -53,7 +60,7 @@ async function load() {
 
 async function loadTechnologies() {
   try {
-    const { data } = await api.get('/technologies')
+    const { data } = await api.get('/technologies', { params: { domain: domain.value } })
     technologies.value = data
   } catch {
     technologies.value = []
@@ -76,6 +83,19 @@ watch([technology, sort], () => {
 
 watch(page, load)
 
+// Al pasar de un índice al otro Vue Router REUTILIZA la instancia, así que
+// onMounted no se vuelve a ejecutar: hay que vaciar los filtros (el de
+// programación tendría tecnología de otro dominio) y recargar todo.
+watch(domain, () => {
+  search.value = ''
+  technology.value = ''
+  sort.value = ''
+  page.value = 1
+  clearTimeout(timer)
+  loadTechnologies()
+  load()
+})
+
 onMounted(() => {
   loadTechnologies()
   load()
@@ -86,9 +106,13 @@ onMounted(() => {
   <div>
     <div class="hero">
       <div>
-        <h1 class="section-title">Tutoriales de la comunidad</h1>
+        <h1 class="section-title">
+          {{ esDibujo ? 'Tutoriales de dibujo' : 'Tutoriales de la comunidad' }}
+        </h1>
         <p class="section-sub" style="margin: 0">
-          Explora, filtra por tecnología y guarda lo que te interese en tu biblioteca.
+          {{ esDibujo
+            ? 'Explora, filtra por técnica y guarda lo que te interese en tu biblioteca.'
+            : 'Explora, filtra por tecnología y guarda lo que te interese en tu biblioteca.' }}
         </p>
       </div>
       <router-link v-if="auth.isAuthenticated" class="btn btn-primary" to="/new-tutorial">
@@ -106,9 +130,13 @@ onMounted(() => {
         aria-label="Buscar tutoriales"
       />
 
-      <!-- ComboBox filtro por tecnología -->
-      <select v-model="technology" class="toolbar-select" aria-label="Filtrar por tecnología">
-        <option value="">Todas las tecnologías</option>
+      <!-- ComboBox filtro por tecnología («técnicas» en el índice de dibujo) -->
+      <select
+        v-model="technology"
+        class="toolbar-select"
+        :aria-label="esDibujo ? 'Filtrar por técnica' : 'Filtrar por tecnología'"
+      >
+        <option value="">{{ esDibujo ? 'Todas las técnicas' : 'Todas las tecnologías' }}</option>
         <option v-for="t in technologies" :key="t.id" :value="t.id">
           {{ t.name }} ({{ t.tutorialCount }})
         </option>
@@ -139,7 +167,7 @@ onMounted(() => {
     <div v-else-if="tutorials.length === 0" class="empty">
       <span class="empty-icon">🔍</span>
       <p>
-        No se encontraron tutoriales
+        {{ esDibujo ? 'No se encontraron tutoriales de dibujo' : 'No se encontraron tutoriales' }}
         <span v-if="search"> para «{{ search }}»</span>.
       </p>
       <button

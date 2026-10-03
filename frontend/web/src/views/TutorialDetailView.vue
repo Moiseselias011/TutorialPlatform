@@ -23,6 +23,10 @@ const busy = ref(false)
 const showSave = ref(false)
 const notice = ref('')
 
+// Respuesta a un comentario y Me gusta de comentarios
+const replyTo = ref(null)   // id del comentario al que se está respondiendo
+const replyText = ref('')
+
 // Miniatura de cabecera: imagen subida por el autor y, si no la hay,
 // la miniatura derivada de la URL de YouTube. Si la imagen falla al
 // cargarse se oculta y se muestra solo el contenido del tutorial.
@@ -54,6 +58,32 @@ async function load() {
 
 onMounted(load)
 
+// La API devuelve los comentarios en plano con su parentCommentId; aquí se
+// reconstruye el árbol y se aplana de nuevo con el nivel de anidación, para
+// poder pintarlos con un único v-for. No hay límite de profundidad: se recorre
+// en preorden (padre, luego sus respuestas en orden cronológico).
+const flatComments = computed(() => {
+  const hijos = new Map()   // parentCommentId (o null) → comentarios
+  for (const c of comments.value) {
+    const key = c.parentCommentId ?? null
+    if (!hijos.has(key)) hijos.set(key, [])
+    hijos.get(key).push(c)
+  }
+  for (const lista of hijos.values()) {
+    lista.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+  }
+
+  const salida = []
+  const recorrer = (parentId, depth) => {
+    for (const c of hijos.get(parentId) ?? []) {
+      salida.push({ ...c, depth })
+      recorrer(c.id, depth + 1)
+    }
+  }
+  recorrer(null, 0)
+  return salida
+})
+
 async function toggleLike() {
   if (!auth.isAuthenticated) return
   busy.value = true
@@ -79,6 +109,55 @@ async function submitComment() {
     tutorial.value.commentCount = comments.value.length
   } catch (e) {
     notice.value = errorMessage(e, 'No se pudo publicar el comentario.')
+  } finally {
+    busy.value = false
+  }
+}
+
+// ---------- Respuestas ----------
+function startReply(c) {
+  replyTo.value = c.id
+  replyText.value = ''
+  editingId.value = null
+}
+
+function cancelReply() {
+  replyTo.value = null
+  replyText.value = ''
+}
+
+async function submitReply(c) {
+  const content = replyText.value.trim()
+  if (!content) return
+  busy.value = true
+  try {
+    const { data } = await api.post(`/tutorials/${tutorial.value.id}/comments`, {
+      content,
+      parentCommentId: c.id,
+    })
+    comments.value.push(data)
+    cancelReply()
+    tutorial.value.commentCount = comments.value.length
+  } catch (e) {
+    notice.value = errorMessage(e, 'No se pudo publicar la respuesta.')
+  } finally {
+    busy.value = false
+  }
+}
+
+// ---------- Me gusta de los comentarios ----------
+async function toggleCommentLike(c) {
+  if (!auth.isAuthenticated) return
+  busy.value = true
+  try {
+    const { data } = await api.post(`/comments/${c.id}/likes`)
+    const target = comments.value.find((x) => x.id === c.id)
+    if (target) {
+      target.likedByMe = data.liked
+      target.likeCount = data.likeCount
+    }
+  } catch (e) {
+    notice.value = errorMessage(e)
   } finally {
     busy.value = false
   }
@@ -110,7 +189,11 @@ async function removeComment(c) {
   busy.value = true
   try {
     await api.delete(`/tutorials/${tutorial.value.id}/comments/${c.id}`)
-    comments.value = comments.value.filter((x) => x.id !== c.id)
+    // El backend no borra las respuestas: las promueve a comentario principal
+    // para que nadie pierda su contenido. Se refleja aquí igual.
+    comments.value = comments.value
+      .map((x) => (x.parentCommentId === c.id ? { ...x, parentCommentId: null } : x))
+      .filter((x) => x.id !== c.id)
     tutorial.value.commentCount = comments.value.length
   } catch (e) {
     notice.value = errorMessage(e, 'No se pudo eliminar.')
@@ -260,9 +343,19 @@ async function removeTutorial() {
         </div>
 
         <ul v-else class="comment-list">
-          <li v-for="c in comments" :key="c.id" class="comment">
+          <li
+            v-for="c in flatComments"
+            :key="c.id"
+            class="comment"
+            :class="{ 'is-reply': c.depth > 0 }"
+            :style="{ marginLeft: Math.min(c.depth, 6) * 20 + 'px' }"
+          >
             <div class="c-head">
-              <span class="c-avatar">{{ c.author.slice(0, 2).toUpperCase() }}</span>
+              <!-- Miniatura de perfil; sin foto, las iniciales de siempre -->
+              <span class="c-avatar">
+                <img v-if="c.photoUrl" :src="c.photoUrl" :alt="c.author" />
+                <template v-else>{{ c.author.slice(0, 2).toUpperCase() }}</template>
+              </span>
               <strong>{{ c.author }}</strong>
               <span class="muted" style="font-size: 12.5px">
                 {{ new Date(c.createdAt).toLocaleString() }}
@@ -288,6 +381,49 @@ async function removeTutorial() {
               </div>
             </template>
             <p v-else class="c-text">{{ c.content }}</p>
+
+            <!-- Me gusta del comentario y respuesta -->
+            <div class="c-actions">
+              <button
+                class="c-act"
+                :class="{ on: c.likedByMe }"
+                :disabled="busy || !auth.isAuthenticated"
+                :title="auth.isAuthenticated ? '' : 'Inicia sesión para dar Me gusta'"
+                @click="toggleCommentLike(c)"
+              >
+                👍 {{ c.likeCount }}
+              </button>
+              <button
+                class="c-act"
+                :disabled="!auth.isAuthenticated"
+                :title="auth.isAuthenticated ? '' : 'Inicia sesión para responder'"
+                @click="replyTo === c.id ? cancelReply() : startReply(c)"
+              >
+                {{ replyTo === c.id ? '✕ Cancelar' : '↩ Responder' }}
+              </button>
+            </div>
+
+            <!-- Formulario de respuesta, colgado del comentario -->
+            <div v-if="replyTo === c.id" class="reply-form">
+              <textarea
+                v-model="replyText"
+                rows="2"
+                maxlength="1000"
+                :placeholder="`Responder a ${c.author}…`"
+              />
+              <div class="row">
+                <span class="hint">{{ replyText.length }}/1000</span>
+                <span class="spacer" />
+                <button class="btn btn-outline btn-sm" @click="cancelReply">Cancelar</button>
+                <button
+                  class="btn btn-primary btn-sm"
+                  :disabled="busy || !replyText.trim()"
+                  @click="submitReply(c)"
+                >
+                  Responder
+                </button>
+              </div>
+            </div>
           </li>
         </ul>
       </div>
@@ -371,11 +507,30 @@ async function removeTutorial() {
   font-size: 10.5px;
   font-weight: 700;
   display: grid; place-items: center;
+  overflow: hidden;   /* recorta la foto al círculo */
+  flex: none;
 }
+.c-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .c-text { margin: 0; font-size: 14.5px; line-height: 1.6; white-space: pre-wrap; }
 .mini {
   border: none; background: none; cursor: pointer;
   font-size: 13px; padding: 3px 5px; border-radius: 5px;
 }
 .mini:hover { background: #e2e8f0; }
+
+/* Acciones bajo cada comentario: Me gusta y Responder */
+.c-actions { display: flex; gap: 4px; margin-top: 8px; }
+.c-act {
+  border: none; background: none; cursor: pointer;
+  font-size: 12.5px; font-weight: 700; padding: 3px 7px;
+  border-radius: 5px; color: var(--text-soft);
+}
+.c-act:hover:not(:disabled) { background: #e2e8f0; color: var(--text); }
+.c-act.on { color: var(--primary); }
+.c-act:disabled { opacity: .5; cursor: default; }
+
+/* Las respuestas se distinguen del comentario principal por el fondo y la
+   sangría (la sangría la pone el :style de cada <li> según su profundidad). */
+.comment.is-reply { background: #f1f5f9; }
+.reply-form { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
 </style>

@@ -1,10 +1,33 @@
 <script setup>
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
+
+// Menú desplegable de «Tutoriales» (Programación / Dibujo)
+const menuOpen = ref(false)
+const enTutoriales = computed(() => route.path === '/' || route.path === '/dibujo')
+
+// Se cierra al pulsar fuera del menú o con Esc; el propio botón no llega
+// aquí porque detiene la propagación.
+function onDocClick(e) {
+  if (e.target instanceof Element && !e.target.closest('.nav-dropdown')) menuOpen.value = false
+}
+function onEsc(e) {
+  if (e.key === 'Escape') menuOpen.value = false
+}
+
+onMounted(() => {
+  document.addEventListener('click', onDocClick)
+  document.addEventListener('keydown', onEsc)
+})
+onUnmounted(() => {
+  document.removeEventListener('click', onDocClick)
+  document.removeEventListener('keydown', onEsc)
+})
 
 const initials = computed(() => (auth.username || '?').slice(0, 2).toUpperCase())
 
@@ -17,13 +40,33 @@ function logout() {
 <template>
   <div class="app-shell">
     <header class="navbar">
-      <router-link to="/" class="brand">
-        <span class="brand-mark">📚</span>
-        <span>Tutorial<span class="accent">Hub</span></span>
+      <router-link to="/" class="brand" aria-label="Vía Alexandria: conocimiento en forma de tutoriales">
+        <img class="brand-logo" src="/logo.png" alt="Vía Alexandria: conocimiento en forma de tutoriales" />
       </router-link>
 
       <nav class="nav-links">
-        <router-link to="/">Tutoriales</router-link>
+        <!-- «Tutoriales» dejó de ser un enlace: abre un menú con los dos índices -->
+        <div class="nav-dropdown">
+          <button
+            type="button"
+            class="nav-dropdown-toggle"
+            :class="{ active: enTutoriales }"
+            :aria-expanded="menuOpen"
+            aria-haspopup="menu"
+            @click.stop="menuOpen = !menuOpen"
+          >
+            Tutoriales <span class="nav-caret" aria-hidden="true">▾</span>
+          </button>
+
+          <div v-show="menuOpen" class="nav-dropdown-menu" role="menu">
+            <router-link to="/" role="menuitem" @click="menuOpen = false">
+              Programación
+            </router-link>
+            <router-link to="/dibujo" role="menuitem" @click="menuOpen = false">
+              Dibujo
+            </router-link>
+          </div>
+        </div>
 
         <template v-if="auth.isAuthenticated">
           <router-link to="/my-lists">Mis listas</router-link>
@@ -55,7 +98,7 @@ function logout() {
     </main>
 
     <footer class="footer">
-      TutorialHub · Plataforma colaborativa de tutoriales de programación
+      Vía Alexandria: conocimiento en forma de tutoriales
     </footer>
   </div>
 </template>

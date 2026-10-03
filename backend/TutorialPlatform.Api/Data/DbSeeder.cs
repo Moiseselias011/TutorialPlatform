@@ -7,6 +7,13 @@ public static class DbSeeder
 {
     public static async Task SeedAsync(AppDbContext db)
     {
+        // Las técnicas de dibujo se aseguran SIEMPRE, aunque la base ya tenga
+        // usuarios: SQLite no ejecuta migraciones (usa EnsureCreated), así que
+        // aquí es su única vía de entrada. En SQL Server llegan con la
+        // migración y este método no hace nada. Idempotente: inserta solo
+        // las que falten.
+        await AsegurarTecnicasDibujoAsync(db);
+
         // Solo sembrar si no hay usuarios
         if (await db.Users.AnyAsync()) return;
 
@@ -116,5 +123,45 @@ public static class DbSeeder
         Console.WriteLine($"[Seed] {await db.Users.CountAsync()} usuarios, " +
                           $"{await db.Technologies.CountAsync()} tecnologías, " +
                           $"{await db.Tutorials.CountAsync()} tutoriales.");
+    }
+
+    /// <summary>
+    /// Las 16 técnicas del índice de dibujo, en el orden en que las pidió el
+    /// usuario. Se insertan solo si faltan: en SQL Server ya vienen de la
+    /// migración y volver a ejecutarlo no debe duplicarlas.
+    /// </summary>
+    private static async Task AsegurarTecnicasDibujoAsync(AppDbContext db)
+    {
+        var tecnicas = new[]
+        {
+            new Technology { Name = "Acuarela",    Slug = "acuarela",    Domain = Domains.Dibujo },
+            new Technology { Name = "Óleo",        Slug = "oleo",        Domain = Domains.Dibujo },
+            new Technology { Name = "Acrílico",    Slug = "acrilico",    Domain = Domains.Dibujo },
+            new Technology { Name = "Témpera",     Slug = "tempera",     Domain = Domains.Dibujo },
+            new Technology { Name = "Tinta",       Slug = "tinta",       Domain = Domains.Dibujo },
+            new Technology { Name = "Pastel",      Slug = "pastel",      Domain = Domains.Dibujo },
+            new Technology { Name = "Carbonilla",  Slug = "carbonilla",  Domain = Domains.Dibujo },
+            new Technology { Name = "Grafito",     Slug = "grafito",     Domain = Domains.Dibujo },
+            new Technology { Name = "Estilógrafo", Slug = "estilografo", Domain = Domains.Dibujo },
+            new Technology { Name = "Plumilla",    Slug = "plumilla",    Domain = Domains.Dibujo },
+            new Technology { Name = "Sanguina",    Slug = "sanguina",    Domain = Domains.Dibujo },
+            new Technology { Name = "Sepia",       Slug = "sepia",       Domain = Domains.Dibujo },
+            new Technology { Name = "Marcadores",  Slug = "marcadores",  Domain = Domains.Dibujo },
+            new Technology { Name = "Aerógrafo",   Slug = "aerografo",   Domain = Domains.Dibujo },
+            new Technology { Name = "Crayones",    Slug = "crayones",    Domain = Domains.Dibujo },
+            new Technology { Name = "Bolígrafo",   Slug = "boligrafo",   Domain = Domains.Dibujo }
+        };
+
+        var existentes = await db.Technologies
+            .Where(t => t.Domain == Domains.Dibujo)
+            .Select(t => t.Slug)
+            .ToListAsync();
+
+        var faltantes = tecnicas.Where(t => !existentes.Contains(t.Slug)).ToArray();
+        if (faltantes.Length == 0) return;
+
+        db.Technologies.AddRange(faltantes);
+        await db.SaveChangesAsync();
+        Console.WriteLine($"[Seed] {faltantes.Length} técnicas de dibujo añadidas.");
     }
 }
