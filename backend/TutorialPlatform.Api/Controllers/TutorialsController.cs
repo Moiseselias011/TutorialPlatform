@@ -39,11 +39,11 @@ public class TutorialsController : ControllerBase
         // ---- Filtro por dominio: el índice de programación no debe mostrar
         // ---- tutoriales de dibujo, ni el de dibujo los de programación ----
         var dominio = string.IsNullOrWhiteSpace(q.Domain)
-            ? Domains.Programacion
+            ? Domains.PorDefecto
             : q.Domain.Trim().ToLowerInvariant();
 
-        if (dominio != Domains.Programacion && dominio != Domains.Dibujo)
-            return BadRequest(new { message = "Dominio no válido. Usa «programacion» o «dibujo»." });
+        if (!Domains.EsValido(dominio))
+            return BadRequest(new { message = "Dominio no válido. Usa «programacion», «dibujo» o «marketing»." });
 
         query = query.Where(t => t.Technology.Domain == dominio);
 

@@ -27,9 +27,20 @@ public class Technology
     public ICollection<Tutorial> Tutorials { get; set; } = new List<Tutorial>();
 }
 
-/// <summary>Dominios de contenido: separan el índice de programación del de dibujo.</summary>
+/// <summary>Dominios de contenido: separan los índices de la aplicación.</summary>
 public static class Domains
 {
     public const string Programacion = "programacion";
     public const string Dibujo = "dibujo";
+    public const string Marketing = "marketing";
+
+    /// <summary>Dominio que devuelve la API cuando en la query no llega ninguno.</summary>
+    public const string PorDefecto = Programacion;
+
+    /// <summary>
+    /// Único sitio donde se lista lo permitido: así, añadir un índice nuevo
+    /// no obliga a recordar en cuántos controladores hay el if.
+    /// </summary>
+    public static bool EsValido(string dominio) =>
+        dominio == Programacion || dominio == Dibujo || dominio == Marketing;
 }

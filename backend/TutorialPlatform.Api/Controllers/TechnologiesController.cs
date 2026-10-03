@@ -23,11 +23,11 @@ public class TechnologiesController : ControllerBase
     public async Task<IActionResult> GetAll([FromQuery] string? domain)
     {
         var dominio = string.IsNullOrWhiteSpace(domain)
-            ? Domains.Programacion
+            ? Domains.PorDefecto
             : domain.Trim().ToLowerInvariant();
 
-        if (dominio != Domains.Programacion && dominio != Domains.Dibujo)
-            return BadRequest(new { message = "Dominio no válido. Usa «programacion» o «dibujo»." });
+        if (!Domains.EsValido(dominio))
+            return BadRequest(new { message = "Dominio no válido. Usa «programacion», «dibujo» o «marketing»." });
 
         var items = await _db.Technologies
             .Where(t => t.Domain == dominio)
@@ -79,11 +79,11 @@ public class TechnologiesController : ControllerBase
             return Conflict(new { message = "Esa tecnología ya existe." });
 
         var dominio = string.IsNullOrWhiteSpace(req.Domain)
-            ? Domains.Programacion
+            ? Domains.PorDefecto
             : req.Domain.Trim().ToLowerInvariant();
 
-        if (dominio != Domains.Programacion && dominio != Domains.Dibujo)
-            return BadRequest(new { message = "Dominio no válido. Usa «programacion» o «dibujo»." });
+        if (!Domains.EsValido(dominio))
+            return BadRequest(new { message = "Dominio no válido. Usa «programacion», «dibujo» o «marketing»." });
 
         var tech = new Technology { Name = name, Slug = slug, ImageUrl = req.ImageUrl, Domain = dominio };
         _db.Technologies.Add(tech);

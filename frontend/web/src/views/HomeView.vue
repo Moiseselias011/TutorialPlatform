@@ -8,10 +8,36 @@ import TutorialCard from '../components/TutorialCard.vue'
 const auth = useAuthStore()
 const route = useRoute()
 
-// El mismo componente atiende los dos índices: «programación» (/) y «dibujo»
-// (/dibujo). El dominio lo decide la ruta y es lo que se le pide a la API.
+// El mismo componente atiende todos los índices: «programación» (/),
+// «dibujo» (/dibujo) y «marketing» (/marketing). El dominio lo decide la
+// ruta y es lo que se le pide a la API; el texto de cada uno sale de aquí.
 const domain = computed(() => route.meta.domain || 'programacion')
-const esDibujo = computed(() => domain.value === 'dibujo')
+
+const INDICES = {
+  programacion: {
+    titulo: 'Tutoriales de la comunidad',
+    subtitulo: 'Explora, filtra por tecnología y guarda lo que te interese en tu biblioteca.',
+    filtro: 'tecnología',
+    todas: 'Todas las tecnologías',
+    vacio: 'No se encontraron tutoriales',
+  },
+  dibujo: {
+    titulo: 'Tutoriales de dibujo',
+    subtitulo: 'Explora, filtra por técnica y guarda lo que te interese en tu biblioteca.',
+    filtro: 'técnica',
+    todas: 'Todas las técnicas',
+    vacio: 'No se encontraron tutoriales de dibujo',
+  },
+  marketing: {
+    titulo: 'Tutoriales de marketing',
+    subtitulo: 'Explora, filtra por estrategia y guarda lo que te interese en tu biblioteca.',
+    filtro: 'estrategia',
+    todas: 'Todas las estrategias',
+    vacio: 'No se encontraron tutoriales de marketing',
+  },
+}
+
+const indice = computed(() => INDICES[domain.value] ?? INDICES.programacion)
 
 const tutorials = ref([])
 const technologies = ref([])
@@ -106,14 +132,8 @@ onMounted(() => {
   <div>
     <div class="hero">
       <div>
-        <h1 class="section-title">
-          {{ esDibujo ? 'Tutoriales de dibujo' : 'Tutoriales de la comunidad' }}
-        </h1>
-        <p class="section-sub" style="margin: 0">
-          {{ esDibujo
-            ? 'Explora, filtra por técnica y guarda lo que te interese en tu biblioteca.'
-            : 'Explora, filtra por tecnología y guarda lo que te interese en tu biblioteca.' }}
-        </p>
+        <h1 class="section-title">{{ indice.titulo }}</h1>
+        <p class="section-sub" style="margin: 0">{{ indice.subtitulo }}</p>
       </div>
       <router-link v-if="auth.isAuthenticated" class="btn btn-primary" to="/new-tutorial">
         + Agregar tutorial
@@ -130,13 +150,13 @@ onMounted(() => {
         aria-label="Buscar tutoriales"
       />
 
-      <!-- ComboBox filtro por tecnología («técnicas» en el índice de dibujo) -->
+      <!-- ComboBox de categoría: tecnología, técnica o estrategia según índice -->
       <select
         v-model="technology"
         class="toolbar-select"
-        :aria-label="esDibujo ? 'Filtrar por técnica' : 'Filtrar por tecnología'"
+        :aria-label="'Filtrar por ' + indice.filtro"
       >
-        <option value="">{{ esDibujo ? 'Todas las técnicas' : 'Todas las tecnologías' }}</option>
+        <option value="">{{ indice.todas }}</option>
         <option v-for="t in technologies" :key="t.id" :value="t.id">
           {{ t.name }} ({{ t.tutorialCount }})
         </option>
@@ -167,7 +187,7 @@ onMounted(() => {
     <div v-else-if="tutorials.length === 0" class="empty">
       <span class="empty-icon">🔍</span>
       <p>
-        {{ esDibujo ? 'No se encontraron tutoriales de dibujo' : 'No se encontraron tutoriales' }}
+        {{ indice.vacio }}
         <span v-if="search"> para «{{ search }}»</span>.
       </p>
       <button

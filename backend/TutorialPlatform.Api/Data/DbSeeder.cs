@@ -7,12 +7,11 @@ public static class DbSeeder
 {
     public static async Task SeedAsync(AppDbContext db)
     {
-        // Las técnicas de dibujo se aseguran SIEMPRE, aunque la base ya tenga
-        // usuarios: SQLite no ejecuta migraciones (usa EnsureCreated), así que
-        // aquí es su única vía de entrada. En SQL Server llegan con la
-        // migración y este método no hace nada. Idempotente: inserta solo
-        // las que falten.
-        await AsegurarTecnicasDibujoAsync(db);
+        // Las técnicas de dibujo y las estrategias de marketing se aseguran
+        // SIEMPRE, aunque la base ya tenga usuarios (mismo motivo: SQLite no
+        // ejecuta migraciones). Idempotentes: solo insertan las que falten.
+        await AsegurarCategoriasAsync(db, Domains.Dibujo, TecnicasDibujo, "técnicas de dibujo");
+        await AsegurarCategoriasAsync(db, Domains.Marketing, EstrategiasMarketing, "estrategias de marketing");
 
         // Solo sembrar si no hay usuarios
         if (await db.Users.AnyAsync()) return;
@@ -127,41 +126,78 @@ public static class DbSeeder
 
     /// <summary>
     /// Las 16 técnicas del índice de dibujo, en el orden en que las pidió el
-    /// usuario. Se insertan solo si faltan: en SQL Server ya vienen de la
-    /// migración y volver a ejecutarlo no debe duplicarlas.
+    /// usuario.
     /// </summary>
-    private static async Task AsegurarTecnicasDibujoAsync(AppDbContext db)
+    private static readonly (string Nombre, string Slug)[] TecnicasDibujo =
     {
-        var tecnicas = new[]
-        {
-            new Technology { Name = "Acuarela",    Slug = "acuarela",    Domain = Domains.Dibujo },
-            new Technology { Name = "Óleo",        Slug = "oleo",        Domain = Domains.Dibujo },
-            new Technology { Name = "Acrílico",    Slug = "acrilico",    Domain = Domains.Dibujo },
-            new Technology { Name = "Témpera",     Slug = "tempera",     Domain = Domains.Dibujo },
-            new Technology { Name = "Tinta",       Slug = "tinta",       Domain = Domains.Dibujo },
-            new Technology { Name = "Pastel",      Slug = "pastel",      Domain = Domains.Dibujo },
-            new Technology { Name = "Carbonilla",  Slug = "carbonilla",  Domain = Domains.Dibujo },
-            new Technology { Name = "Grafito",     Slug = "grafito",     Domain = Domains.Dibujo },
-            new Technology { Name = "Estilógrafo", Slug = "estilografo", Domain = Domains.Dibujo },
-            new Technology { Name = "Plumilla",    Slug = "plumilla",    Domain = Domains.Dibujo },
-            new Technology { Name = "Sanguina",    Slug = "sanguina",    Domain = Domains.Dibujo },
-            new Technology { Name = "Sepia",       Slug = "sepia",       Domain = Domains.Dibujo },
-            new Technology { Name = "Marcadores",  Slug = "marcadores",  Domain = Domains.Dibujo },
-            new Technology { Name = "Aerógrafo",   Slug = "aerografo",   Domain = Domains.Dibujo },
-            new Technology { Name = "Crayones",    Slug = "crayones",    Domain = Domains.Dibujo },
-            new Technology { Name = "Bolígrafo",   Slug = "boligrafo",   Domain = Domains.Dibujo }
-        };
+        ("Acuarela", "acuarela"),
+        ("Óleo", "oleo"),
+        ("Acrílico", "acrilico"),
+        ("Témpera", "tempera"),
+        ("Tinta", "tinta"),
+        ("Pastel", "pastel"),
+        ("Carbonilla", "carbonilla"),
+        ("Grafito", "grafito"),
+        ("Estilógrafo", "estilografo"),
+        ("Plumilla", "plumilla"),
+        ("Sanguina", "sanguina"),
+        ("Sepia", "sepia"),
+        ("Marcadores", "marcadores"),
+        ("Aerógrafo", "aerografo"),
+        ("Crayones", "crayones"),
+        ("Bolígrafo", "boligrafo")
+    };
 
+    /// <summary>
+    /// Las 16 estrategias del índice de marketing, en el orden en que las
+    /// pidió el usuario. Los paréntesis de SEO y SEM van en el nombre para
+    /// que el ComboBox se lea solo; el slug se queda corto.
+    /// </summary>
+    private static readonly (string Nombre, string Slug)[] EstrategiasMarketing =
+    {
+        ("Marketing de contenidos", "marketing-de-contenidos"),
+        ("Inbound marketing", "inbound-marketing"),
+        ("Marketing de afiliados", "marketing-de-afiliados"),
+        ("Growth hacking", "growth-hacking"),
+        ("Marketing de influencers", "marketing-de-influencers"),
+        ("Co-branding", "co-branding"),
+        ("Email marketing", "email-marketing"),
+        ("Marketing de guerrilla", "marketing-de-guerrilla"),
+        ("Relaciones públicas", "relaciones-publicas"),
+        ("SEO (posicionamiento web)", "seo"),
+        ("SEM (publicidad paga)", "sem"),
+        ("Marketing experiencial", "marketing-experiencial"),
+        ("Neuromarketing", "neuromarketing"),
+        ("Video marketing", "video-marketing"),
+        ("Marketing local", "marketing-local"),
+        ("Storytelling", "storytelling")
+    };
+
+    /// <summary>
+    /// Asegura que existan las categorías de un dominio. Se insertan solo las
+    /// que falten: en SQL Server el reparto ya está hecho y volver a
+    /// ejecutarlo no debe duplicar nada.
+    /// </summary>
+    private static async Task AsegurarCategoriasAsync(
+        AppDbContext db,
+        string dominio,
+        (string Nombre, string Slug)[] items,
+        string etiqueta)
+    {
         var existentes = await db.Technologies
-            .Where(t => t.Domain == Domains.Dibujo)
+            .Where(t => t.Domain == dominio)
             .Select(t => t.Slug)
             .ToListAsync();
 
-        var faltantes = tecnicas.Where(t => !existentes.Contains(t.Slug)).ToArray();
+        var faltantes = items
+            .Where(i => !existentes.Contains(i.Slug))
+            .Select(i => new Technology { Name = i.Nombre, Slug = i.Slug, Domain = dominio })
+            .ToArray();
+
         if (faltantes.Length == 0) return;
 
         db.Technologies.AddRange(faltantes);
         await db.SaveChangesAsync();
-        Console.WriteLine($"[Seed] {faltantes.Length} técnicas de dibujo añadidas.");
+        Console.WriteLine($"[Seed] {faltantes.Length} {etiqueta} añadidas.");
     }
 }

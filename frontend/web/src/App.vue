@@ -9,7 +9,8 @@ const route = useRoute()
 
 // Menú desplegable de «Tutoriales» (Programación / Dibujo)
 const menuOpen = ref(false)
-const enTutoriales = computed(() => route.path === '/' || route.path === '/dibujo')
+// «Tutoriales» está activo en cualquiera de sus índices
+const enTutoriales = computed(() => ['/', '/dibujo', '/marketing'].includes(route.path))
 
 // Se cierra al pulsar fuera del menú o con Esc; el propio botón no llega
 // aquí porque detiene la propagación.
@@ -45,7 +46,7 @@ function logout() {
       </router-link>
 
       <nav class="nav-links">
-        <!-- «Tutoriales» dejó de ser un enlace: abre un menú con los dos índices -->
+        <!-- «Tutoriales» dejó de ser un enlace: abre un menú con los índices -->
         <div class="nav-dropdown">
           <button
             type="button"
@@ -64,6 +65,9 @@ function logout() {
             </router-link>
             <router-link to="/dibujo" role="menuitem" @click="menuOpen = false">
               Dibujo
+            </router-link>
+            <router-link to="/marketing" role="menuitem" @click="menuOpen = false">
+              Marketing
             </router-link>
           </div>
         </div>

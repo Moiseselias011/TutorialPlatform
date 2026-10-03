@@ -19,7 +19,6 @@ const form = ref({
 const loading = ref(false)
 const fetching = ref(isEdit.value)
 const error = ref('')
-const uploading = ref(false)
 
 // Validaciones en cliente (espejo del servidor)
 const urlError = computed(() => {
@@ -78,33 +77,6 @@ onMounted(async () => {
   if (isEdit.value) await loadTutorial()
 })
 
-/** Sube la imagen y guarda la URL devuelta en el formulario. */
-async function onFile(e) {
-  const file = e.target.files?.[0]
-  if (!file) return
-
-  error.value = ''
-  if (file.size > 5 * 1024 * 1024) {
-    error.value = 'La imagen no puede superar 5 MB.'
-    e.target.value = ''
-    return
-  }
-
-  uploading.value = true
-  try {
-    const fd = new FormData()
-    fd.append('file', file)
-    const { data } = await api.post('/images', fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-    form.value.imageUrl = data.url
-  } catch (err) {
-    error.value = errorMessage(err, 'No se pudo subir la imagen.')
-  } finally {
-    uploading.value = false
-  }
-}
-
 async function submit() {
   error.value = ''
   if (!isValid.value) {
@@ -118,6 +90,10 @@ async function submit() {
       title: form.value.title.trim(),
       description: form.value.description.trim(),
       url: form.value.url.trim(),
+      // El campo «Imagen» ya no está en el formulario (las miniaturas son las
+      // de YouTube), pero imageUrl se sigue enviando con el valor que traía:
+      // el PUT hace ImageUrl = req.ImageUrl, así que omitirlo pondría a null
+      // y borraria la imagen del único tutorial que hoy tiene una.
       imageUrl: form.value.imageUrl.trim() || null,
       technologyId: Number(form.value.technologyId),
     }
@@ -208,26 +184,10 @@ async function submit() {
           </select>
         </div>
 
-        <div class="field">
-          <label for="img">Imagen</label>
-          <input id="img" type="file" accept="image/*" @change="onFile" />
-          <span class="hint">
-            <template v-if="uploading">Subiendo imagen…</template>
-            <template v-else-if="form.imageUrl">✅ Imagen lista: {{ form.imageUrl }}</template>
-            <template v-else>Opcional · JPG, PNG, GIF, WEBP o SVG · máx. 5 MB</template>
-          </span>
-          <img
-            v-if="form.imageUrl"
-            :src="form.imageUrl"
-            alt="Vista previa"
-            style="max-width: 100%; max-height: 180px; border-radius: 8px; margin-top: 8px; border: 1px solid var(--border)"
-          />
-        </div>
-
         <div class="row">
           <button class="btn btn-outline" type="button" @click="router.back()">Cancelar</button>
           <span class="spacer" />
-          <button class="btn btn-primary" type="submit" :disabled="loading || uploading || !isValid">
+          <button class="btn btn-primary" type="submit" :disabled="loading || !isValid">
             <span v-if="loading" class="spinner" />
             {{ loading ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Publicar tutorial' }}
           </button>
