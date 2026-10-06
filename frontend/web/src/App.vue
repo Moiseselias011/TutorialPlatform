@@ -75,6 +75,9 @@ function logout() {
         <template v-if="auth.isAuthenticated">
           <router-link to="/my-lists">Mis listas</router-link>
           <router-link to="/profile">Mi perfil</router-link>
+          <!-- Solo ADMIN: las cifras de visitas son dato interno (§2.2).
+               La ruta también lo protege el backend, aquí es solo UX. -->
+          <router-link v-if="auth.isAdmin" to="/estadisticas">Estadísticas</router-link>
         </template>
       </nav>
 

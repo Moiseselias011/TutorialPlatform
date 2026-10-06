@@ -15,6 +15,7 @@ public class AppDbContext : DbContext
     public DbSet<Like> Likes => Set<Like>();
     public DbSet<Comment> Comments => Set<Comment>();
     public DbSet<CommentLike> CommentLikes => Set<CommentLike>();
+    public DbSet<Visit> Visits => Set<Visit>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -146,6 +147,18 @@ public class AppDbContext : DbContext
              .WithMany(c => c.CommentLikes)
              .HasForeignKey(cl => cl.CommentId)
              .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ---------- Visits (contador de visitas para el panel del admin) ----------
+        mb.Entity<Visit>(e =>
+        {
+            e.Property(v => v.Path).HasMaxLength(200);
+            e.Property(v => v.VisitorHash).HasMaxLength(64);
+
+            // Las dos consultas del resumen: agrupar por fecha y contar
+            // visitantes distintos por hash.
+            e.HasIndex(v => v.OccurredAt);
+            e.HasIndex(v => v.VisitorHash);
         });
     }
 }

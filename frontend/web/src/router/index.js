@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import api from '../api/client'
 
 const routes = [
   { path: '/', name: 'home', component: () => import('../views/HomeView.vue'), meta: { domain: 'programacion' } },
@@ -48,6 +49,12 @@ const routes = [
     component: () => import('../views/ListDetailView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/estadisticas',
+    name: 'stats',
+    component: () => import('../views/StatsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../views/NotFoundView.vue') },
 ]
 
@@ -72,7 +79,27 @@ router.beforeEach(async (to) => {
     return { name: 'home' }
   }
 
+  // Panel de administración: aquí es solo para no enseñar una pantalla que
+  // fallaría — el que manda de verdad es el backend, que devuelve 403 (§5.8).
+  if (to.meta.requiresAdmin && !auth.isAdmin) {
+    return { name: 'home' }
+  }
+
   return true
+})
+
+/**
+ * Contador de visitas: una petición por página que se pinta, con la ruta sin
+ * consulta y truncada a 200 (el MaxLength del servidor, para que la
+ * validación de cliente y servidor coincida).
+ *
+ * - La sesión de ADMIN no se registra: las cifras miden a los demás.
+ * - Si algo falla, da igual: la navegación no puede romperse por un contador.
+ */
+router.afterEach((to) => {
+  if (useAuthStore().isAdmin) return
+  const ruta = (to.path || '/').slice(0, 200)
+  api.post('/stats/visit', { path: ruta }).catch(() => {})
 })
 
 export default router

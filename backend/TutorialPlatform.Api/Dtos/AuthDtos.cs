@@ -69,3 +69,17 @@ public class UserDto
     /// <summary>Distribución de "Me gusta" recibidos por el usuario.</summary>
     public int TotalLikesReceived { get; set; }
 }
+
+/// <summary>
+/// Fila del listado de cuentas que ve el administrador.
+/// Es exactamente lo que se pidió —usuario, correo, fecha de alta y rol— y
+/// nada más: no expone photo, ni likes, ni contraseñas (jamás), ni permite
+/// mirar una cuenta concreta: no existe GET /api/users/{id}.
+/// </summary>
+public class UserListDto
+{
+    public string Username { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public string Role { get; set; } = string.Empty;
+}
