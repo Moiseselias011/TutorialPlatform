@@ -40,10 +40,37 @@ const isValid = computed(
     form.value.technologyId !== '',
 )
 
+// Los tres dominios que existen en la plataforma (espejo de «Domains», en el backend).
+const DOMINIOS = ['programacion', 'dibujo', 'marketing']
+
+/**
+ * Tecnologías del dominio que tocan: la API las devuelve siempre de un solo
+ * dominio y sin parámetro entrega las de programación.
+ *
+ *  - Al crear, el de la sección desde la que se vino (?dominio=...); si no
+ *    viene nada, programación, que es el valor por defecto del servidor.
+ *  - Al editar, el de la tecnología propia del tutorial. Ni el DTO del tutorial
+ *    ni /technologies/{id} traen el dominio, así que se piden los tres y se
+ *    conserva la lista que contiene esa tecnología; si no apareciera, la de
+ *    programación, como hasta ahora.
+ */
 async function loadTechnologies() {
   try {
-    const { data } = await api.get('/technologies')
-    technologies.value = data
+    if (!isEdit.value) {
+      const dominio = DOMINIOS.includes(route.query.dominio)
+        ? route.query.dominio
+        : 'programacion'
+      const { data } = await api.get('/technologies', { params: { domain: dominio } })
+      technologies.value = data
+      return
+    }
+
+    const id = Number(form.value.technologyId)
+    const listas = await Promise.all(
+      DOMINIOS.map((d) => api.get('/technologies', { params: { domain: d } }))
+    )
+    const i = listas.findIndex((r) => r.data.some((t) => t.id === id))
+    technologies.value = listas[i === -1 ? 0 : i].data
   } catch (e) {
     error.value = errorMessage(e, 'No se pudieron cargar las tecnologías.')
   }
@@ -73,8 +100,11 @@ async function loadTutorial() {
 }
 
 onMounted(async () => {
-  await loadTechnologies()
+  // Al editar, el tutorial antes: su tecnología es la que dice qué dominio hay
+  // que pedir. Si no se puede cargar, loadTechnologies se queda con el
+  // valor por defecto y no se pierde el mensaje de error.
   if (isEdit.value) await loadTutorial()
+  await loadTechnologies()
 })
 
 async function submit() {

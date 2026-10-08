@@ -135,7 +135,14 @@ onMounted(() => {
         <h1 class="section-title">{{ indice.titulo }}</h1>
         <p class="section-sub" style="margin: 0">{{ indice.subtitulo }}</p>
       </div>
-      <router-link v-if="auth.isAuthenticated" class="btn btn-primary" to="/new-tutorial">
+      <!-- El dominio viaja en la consulta: sin él, el formulario pediría las
+           tecnologías de programación y en /dibujo o /marketing no habría con
+           qué crear. -->
+      <router-link
+        v-if="auth.isAuthenticated"
+        class="btn btn-primary"
+        :to="{ path: '/new-tutorial', query: { dominio: domain } }"
+      >
         + Agregar tutorial
       </router-link>
     </div>
