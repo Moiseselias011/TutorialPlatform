@@ -13,70 +13,80 @@ const error = ref('')
 const notice = ref('')
 const busy = ref(false)
 
-// Búsqueda y paginación DENTRO de la lista personal.
-// La API devuelve la lista completa en una sola petición, así que se filtra
-// y pagina en cliente: respuesta inmediata mientras se escribe y sin
-// llamadas adicionales al servidor.
+// Búsqueda y paginación DENTRO de la lista personal, resueltas en el SERVIDOR
+// con el mismo patrón que HomeView: una lista no tiene tope de tutoriales, así
+// que no se descarga entera para cortarla en el navegador.
 const search = ref('')
 const page = ref(1)
 const pageSize = 6
 
-const filtered = computed(() => {
-  const all = list.value?.tutorials ?? []
-  const q = search.value.trim().toLowerCase()
-  if (!q) return all
-  return all.filter(
-    (t) =>
-      (t.title || '').toLowerCase().includes(q) ||
-      (t.description || '').toLowerCase().includes(q) ||
-      (t.technology?.name || '').toLowerCase().includes(q) ||
-      (t.author?.username || '').toLowerCase().includes(q),
-  )
-})
+const items = computed(() => list.value?.tutorials?.items ?? [])
+const totalCount = computed(() => list.value?.tutorials?.totalCount ?? 0)
+const totalPages = computed(() => list.value?.tutorials?.totalPages ?? 1)
 
-const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)))
+let timer = null
 
-const pageItems = computed(() => {
-  const start = (page.value - 1) * pageSize
-  return filtered.value.slice(start, start + pageSize)
-})
-
-// Escribir una búsqueda vuelve siempre a la primera página
-watch(search, () => {
-  page.value = 1
-})
-
-// Si la página actual deja de existir (menos resultados, o se quitó un
-// tutorial), se recorta al último valor válido en lugar de dejar la vista en blanco.
-watch(totalPages, (n) => {
-  if (page.value > n) page.value = n
-})
+// Guarda contra respuestas fuera de orden: load() se dispara desde el debounce
+// del buscador y desde la paginación. Si dos peticiones vuelan a la vez y la
+// antigua llega la última, sobrescribiría los datos frescos con los obsoletos.
+let requestSeq = 0
 
 async function load() {
+  const seq = ++requestSeq
   loading.value = true
   error.value = ''
-  search.value = ''
-  page.value = 1
   try {
-    const { data } = await api.get(`/lists/${route.params.id}`)
+    const params = { page: page.value, pageSize }
+    if (search.value.trim()) params.search = search.value.trim()
+
+    const { data } = await api.get(`/lists/${route.params.id}`, { params })
+    if (seq !== requestSeq) return // respuesta obsoleta
     list.value = data
+
+    // Si la página quedó fuera de rango (p. ej. al quitar el último tutorial
+    // de la última página) se recorta al último valor válido y el watch de
+    // `page` recarga. totalPages nunca baja de 1, así que esto termina siempre.
+    if (page.value > data.tutorials.totalPages) page.value = data.tutorials.totalPages
   } catch (e) {
+    if (seq !== requestSeq) return // fallo de una petición ya superada
     error.value = errorMessage(e, 'No se pudo cargar la lista.')
   } finally {
-    loading.value = false
+    if (seq === requestSeq) loading.value = false
   }
 }
 
-onMounted(load)
-watch(() => route.params.id, load)
+// Debounce del buscador
+watch(search, () => {
+  clearTimeout(timer)
+  timer = setTimeout(() => {
+    page.value = 1
+    load()
+  }, 320)
+})
+
+watch(page, load)
+
+// Al cambiar de lista se vacía la búsqueda (si no, seguiría aplicada la de la
+// anterior) y se recarga desde la primera página.
+function reload() {
+  search.value = ''
+  page.value = 1
+  clearTimeout(timer)
+  load()
+}
+
+onMounted(reload)
+watch(() => route.params.id, reload)
 
 async function remove(tutorial) {
   if (!confirm(`¿Quitar "${tutorial.title}" de esta lista? El tutorial sigue en la plataforma.`)) return
   busy.value = true
   try {
     await api.delete(`/lists/${list.value.id}/save/${tutorial.id}`)
-    list.value.tutorials = list.value.tutorials.filter((t) => t.id !== tutorial.id)
     notice.value = 'Quitado de la lista.'
+    // Recarga desde el servidor: si se quitó el último de la última página,
+    // load() recorta la página en lugar de dejar la vista en blanco.
+    await load()
   } catch (e) {
     error.value = errorMessage(e, 'No se pudo quitar.')
   } finally {
@@ -105,7 +115,7 @@ async function remove(tutorial) {
         <div>
           <h1 class="section-title">📁 {{ list.name }}</h1>
           <p class="section-sub" style="margin: 0">
-            {{ list.tutorials.length }} tutoriales guardados ·
+            {{ list.tutorialCount }} tutoriales guardados ·
             creada el {{ new Date(list.createdAt).toLocaleDateString() }}
           </p>
         </div>
@@ -114,7 +124,7 @@ async function remove(tutorial) {
       <div v-if="notice" class="alert alert-success" style="margin-bottom: 16px">{{ notice }}</div>
 
       <!-- Lista totalmente vacía -->
-      <div v-if="list.tutorials.length === 0" class="empty">
+      <div v-if="list.tutorialCount === 0" class="empty">
         <span class="empty-icon">📭</span>
         <p>Esta lista está vacía.</p>
         <p class="hint">Usa el botón «Guardar» en cualquier tutorial para añadirlo aquí.</p>
@@ -132,19 +142,19 @@ async function remove(tutorial) {
             aria-label="Buscar dentro de esta lista"
           />
           <span class="hint" style="align-self: center; white-space: nowrap">
-            {{ filtered.length }} de {{ list.tutorials.length }}
+            {{ totalCount }} de {{ list.tutorialCount }}
           </span>
         </div>
 
         <!-- Tiene tutoriales pero ninguno coincide con la búsqueda -->
-        <div v-if="filtered.length === 0" class="empty">
+        <div v-if="totalCount === 0" class="empty">
           <span class="empty-icon">🔍</span>
           <p>No hay tutoriales que coincidan con «{{ search }}».</p>
           <button class="btn btn-outline" @click="search = ''">Limpiar búsqueda</button>
         </div>
 
         <div v-else class="grid">
-          <div v-for="t in pageItems" :key="t.id" class="wrapper">
+          <div v-for="t in items" :key="t.id" class="wrapper">
             <TutorialCard :tutorial="t" />
             <button class="btn btn-outline btn-sm unsave" :disabled="busy" @click="remove(t)">
               ✕ Quitar de esta lista

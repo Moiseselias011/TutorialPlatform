@@ -49,9 +49,12 @@ public class ListsController : ControllerBase
         return Ok(lists);
     }
 
-    // GET /api/lists/5 → detalle con tutoriales (solo dueño)
+    // GET /api/lists/5 → detalle PAGINADO con buscador (solo dueño)
+    // La lista no tiene tope de tutoriales, así que la paginación vive en el
+    // SERVIDOR —igual que en GET /api/tutorials— en lugar de descargarla entera
+    // y recortarla en el navegador.
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<PersonalListDetailDto>> GetById(int id)
+    public async Task<ActionResult<PersonalListDetailDto>> GetById(int id, [FromQuery] PersonalListQuery q)
     {
         var list = await _db.PersonalLists
             .AsNoTracking()
@@ -63,14 +66,36 @@ public class ListsController : ControllerBase
         if (list.OwnerId != _current.Id)
             return Forbid(); // las listas personales son privadas
 
-        // EF Core no permite Include tras un Select: obtenemos los ids primero
-        var orderedIds = await _db.SavedTutorials
+        var saved = _db.SavedTutorials
             .AsNoTracking()
-            .Where(s => s.PersonalListId == id)
+            .Where(s => s.PersonalListId == id);
+
+        // Total REAL de la lista: se cuenta ANTES del filtro, es el de la cabecera
+        var totalEnLista = await saved.CountAsync();
+
+        // ---- Buscador dentro de la lista (título, descripción, tecnología, autor) ----
+        if (!string.IsNullOrWhiteSpace(q.Search))
+        {
+            var term = q.Search.Trim().ToLowerInvariant();
+            saved = saved.Where(s =>
+                s.Tutorial.Title.ToLower().Contains(term) ||
+                s.Tutorial.Description.ToLower().Contains(term) ||
+                s.Tutorial.Technology.Name.ToLower().Contains(term) ||
+                s.Tutorial.Author.Username.ToLower().Contains(term));
+        }
+
+        var total = await saved.CountAsync();
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)q.PageSize));
+
+        // "Más reciente guardado primero" + recorte de la página en una sola consulta
+        var orderedIds = await saved
             .OrderByDescending(s => s.SavedAt)
+            .Skip((q.Page - 1) * q.PageSize)
+            .Take(q.PageSize)
             .Select(s => s.TutorialId)
             .ToListAsync();
 
+        // EF Core no permite Include tras un Select: obtenemos los ids primero
         var tutorials = await _db.Tutorials
             .AsNoTracking()
             .Include(t => t.Technology)
@@ -91,7 +116,15 @@ public class ListsController : ControllerBase
             Name = list.Name,
             OwnerId = list.OwnerId,
             CreatedAt = list.CreatedAt,
-            Tutorials = await _mapper.MapManyAsync(ordered)
+            TutorialCount = totalEnLista,
+            Tutorials = new PagedResult<TutorialDto>
+            {
+                Items = await _mapper.MapManyAsync(ordered),
+                Page = q.Page,
+                PageSize = q.PageSize,
+                TotalCount = total,
+                TotalPages = totalPages
+            }
         });
     }
 
